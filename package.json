@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
+    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 nodemon src/server.js",
     "test": "echo \"No tests yet\" && exit 0"
   },
   "keywords": [],
