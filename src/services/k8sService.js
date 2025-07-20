@@ -165,64 +165,90 @@ class K8sService {
     }
   }
 
-  // Delete pod and related resources (positional parameters)
+  // Delete pod and related resources (with debugging)
   async deletePod(userId) {
     try {
-      console.log("Deleting pod for user:", userId);
+      console.log("=== DELETING POD FOR USER:", userId, "===");
 
-      const deploymentName = `${userId}-n8n-basic`;
-      const serviceName = `${userId}-n8n-service`;
-      const pvcName = `${userId}-n8n-storage`;
+      // First, let's see what exists in K8s
+      console.log("Checking existing resources...");
 
-      console.log("Target deployment:", deploymentName);
-      console.log("Target namespace:", this.namespace);
-
-      // Delete deployment with positional parameters
+      // List all deployments in namespace
       try {
-        await this.appsV1Api.deleteNamespacedDeployment(
-          deploymentName,
+        const deployments = await this.appsV1Api.listNamespacedDeployment(
           this.namespace
         );
-        console.log("Basic deployment deleted");
+        console.log(
+          "Existing deployments:",
+          deployments.body.items.map((d) => d.metadata.name)
+        );
       } catch (err) {
-        console.log("Basic deployment not found, trying pro...");
-        // Try pro deployment
-        const proDeploymentName = `${userId}-n8n-pro`;
+        console.log("Failed to list deployments:", err.message);
+      }
+
+      // Try both basic and pro deployment names
+      const deploymentNames = [`${userId}-n8n-basic`, `${userId}-n8n-pro`];
+      let deploymentDeleted = false;
+
+      for (const deploymentName of deploymentNames) {
         try {
+          console.log("Attempting to delete deployment:", deploymentName);
           await this.appsV1Api.deleteNamespacedDeployment(
-            proDeploymentName,
-            this.namespace
+            deploymentName,
+            this.namespace,
+            undefined, // body
+            undefined, // pretty
+            undefined, // dryRun
+            undefined, // gracePeriodSeconds
+            undefined, // orphanDependents
+            undefined // propagationPolicy
           );
-          console.log("Pro deployment deleted");
-        } catch (proErr) {
-          console.log("No deployment found for user:", userId);
+          console.log("✅ Successfully deleted deployment:", deploymentName);
+          deploymentDeleted = true;
+          break;
+        } catch (error) {
+          console.log(
+            "❌ Failed to delete deployment:",
+            deploymentName,
+            "-",
+            error.message
+          );
         }
       }
 
-      // Delete service with positional parameters
+      // Delete service
+      const serviceName = `${userId}-n8n-service`;
       try {
+        console.log("Attempting to delete service:", serviceName);
         await this.coreV1Api.deleteNamespacedService(
           serviceName,
           this.namespace
         );
-        console.log("Service deleted");
-      } catch (err) {
-        console.log("Service not found:", serviceName);
+        console.log("✅ Successfully deleted service:", serviceName);
+      } catch (error) {
+        console.log(
+          "❌ Failed to delete service:",
+          serviceName,
+          "-",
+          error.message
+        );
       }
 
-      // Delete PVC with positional parameters
+      // Delete PVC
+      const pvcName = `${userId}-n8n-storage`;
       try {
+        console.log("Attempting to delete PVC:", pvcName);
         await this.coreV1Api.deleteNamespacedPersistentVolumeClaim(
           pvcName,
           this.namespace
         );
-        console.log("PVC deleted");
-      } catch (err) {
-        console.log("PVC not found:", pvcName);
+        console.log("✅ Successfully deleted PVC:", pvcName);
+      } catch (error) {
+        console.log("❌ Failed to delete PVC:", pvcName, "-", error.message);
       }
 
-      console.log("Pod deletion completed for user:", userId);
-      return true;
+      console.log("=== DELETE OPERATION COMPLETED ===");
+      return deploymentDeleted; // Return true only if deployment actually deleted
     } catch (error) {
       console.error("Delete pod error:", error);
       throw new Error(`Failed to delete pod: ${error.message}`);
