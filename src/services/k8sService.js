@@ -48,33 +48,42 @@ class K8sService {
     return docs;
   }
 
-  // Create PVC
+  // Replace createPvc method with this fixed version
   async createPvc(userId) {
     try {
-      console.log("Creating PVC for user:", userId);
-      console.log("Target namespace:", this.namespace);
-
-      const pvcYaml = this.loadPvcTemplate(userId);
-      console.log("PVC YAML loaded:", pvcYaml);
-
-      const pvcManifest = this.parseYaml(pvcYaml)[0];
-      console.log("Parsed PVC manifest:", JSON.stringify(pvcManifest, null, 2));
-
-      // Ensure namespace is set
-      if (!pvcManifest.metadata) {
-        pvcManifest.metadata = {};
-      }
-      pvcManifest.metadata.namespace = this.namespace;
-
       console.log(
-        "Final PVC manifest with namespace:",
-        JSON.stringify(pvcManifest, null, 2)
+        "Creating PVC for user:",
+        userId,
+        "in namespace:",
+        this.namespace
       );
-      console.log("About to call API with namespace:", this.namespace);
 
+      const pvcManifest = {
+        apiVersion: "v1",
+        kind: "PersistentVolumeClaim",
+        metadata: {
+          name: `${userId}-n8n-storage`,
+          namespace: this.namespace,
+        },
+        spec: {
+          accessModes: ["ReadWriteOnce"],
+          storageClassName: "user-pod-storage",
+          resources: {
+            requests: {
+              storage: "1Gi",
+            },
+          },
+        },
+      };
+
+      console.log("Creating PVC with explicit parameters");
+
+      // Use explicit parameter object instead of positional parameters
       const result = await this.coreV1Api.createNamespacedPersistentVolumeClaim(
-        this.namespace,
-        pvcManifest
+        {
+          namespace: this.namespace,
+          body: pvcManifest,
+        }
       );
 
       console.log("PVC created successfully");
