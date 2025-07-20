@@ -229,8 +229,16 @@ class K8sService {
   // Get cluster resources
   async getClusterResources() {
     try {
+      console.log("Getting cluster resources...");
+
       const nodes = await this.coreV1Api.listNode();
-      const pods = await this.coreV1Api.listNamespacedPod(this.namespace);
+
+      // Use explicit parameter format for listNamespacedPod
+      const pods = await this.coreV1Api.listNamespacedPod({
+        namespace: this.namespace,
+      });
+
+      console.log("Cluster resources retrieved successfully");
 
       return {
         nodes: nodes.body.items.length,
@@ -240,6 +248,7 @@ class K8sService {
         ).length,
       };
     } catch (error) {
+      console.error("Get cluster resources error:", error);
       throw new Error(`Failed to get cluster resources: ${error.message}`);
     }
   }
