@@ -1,0 +1,182 @@
+const k8s = require("@kubernetes/client-node");
+const fs = require("fs");
+const path = require("path");
+
+class K8sService {
+  constructor() {
+    this.kc = new k8s.KubeConfig();
+    this.kc.loadFromDefault();
+
+    this.appsV1Api = this.kc.makeApiClient(k8s.AppsV1Api);
+    this.coreV1Api = this.kc.makeApiClient(k8s.CoreV1Api);
+
+    this.namespace = "user-pods";
+  }
+
+  // Load and process templates
+  loadTemplate(templateType, userId, nodePort) {
+    const templatePath = path.join(
+      __dirname,
+      `../../templates/n8n-${templateType}-template.yaml`
+    );
+    let template = fs.readFileSync(templatePath, "utf8");
+
+    // Replace placeholders
+    template = template.replace(/USER_ID/g, userId);
+    template = template.replace(/NODE_PORT/g, nodePort.toString());
+
+    return template;
+  }
+
+  loadPvcTemplate(userId) {
+    const templatePath = path.join(
+      __dirname,
+      "../../templates/pvc-template.yaml"
+    );
+    let template = fs.readFileSync(templatePath, "utf8");
+
+    // Replace placeholders
+    template = template.replace(/USER_ID/g, userId);
+
+    return template;
+  }
+
+  // Parse YAML to JSON
+  parseYaml(yamlContent) {
+    const yaml = require("js-yaml");
+    const docs = yaml.loadAll(yamlContent);
+    return docs;
+  }
+
+  // Create PVC
+  async createPvc(userId) {
+    try {
+      const pvcYaml = this.loadPvcTemplate(userId);
+      const pvcManifest = this.parseYaml(pvcYaml)[0];
+
+      const result = await this.coreV1Api.createNamespacedPersistentVolumeClaim(
+        this.namespace,
+        pvcManifest
+      );
+
+      return result.body;
+    } catch (error) {
+      throw new Error(`Failed to create PVC: ${error.message}`);
+    }
+  }
+
+  // Create pod deployment
+  async createPod(userId, planType, nodePort) {
+    try {
+      // Create PVC first
+      await this.createPvc(userId);
+
+      // Load and parse pod template
+      const podYaml = this.loadTemplate(planType, userId, nodePort);
+      const manifests = this.parseYaml(podYaml);
+
+      const deployment = manifests[0];
+      const service = manifests[1];
+
+      // Create deployment
+      const deploymentResult = await this.appsV1Api.createNamespacedDeployment(
+        this.namespace,
+        deployment
+      );
+
+      // Create service
+      const serviceResult = await this.coreV1Api.createNamespacedService(
+        this.namespace,
+        service
+      );
+
+      return {
+        deployment: deploymentResult.body,
+        service: serviceResult.body,
+      };
+    } catch (error) {
+      throw new Error(`Failed to create pod: ${error.message}`);
+    }
+  }
+
+  // Delete pod and related resources
+  async deletePod(userId) {
+    try {
+      const deploymentName = `${userId}-n8n-basic`; // atau pro
+      const serviceName = `${userId}-n8n-service`;
+      const pvcName = `${userId}-n8n-storage`;
+
+      // Delete deployment
+      try {
+        await this.appsV1Api.deleteNamespacedDeployment(
+          deploymentName,
+          this.namespace
+        );
+      } catch (err) {
+        // Try pro deployment
+        const proDeploymentName = `${userId}-n8n-pro`;
+        await this.appsV1Api.deleteNamespacedDeployment(
+          proDeploymentName,
+          this.namespace
+        );
+      }
+
+      // Delete service
+      await this.coreV1Api.deleteNamespacedService(serviceName, this.namespace);
+
+      // Delete PVC
+      await this.coreV1Api.deleteNamespacedPersistentVolumeClaim(
+        pvcName,
+        this.namespace
+      );
+
+      return true;
+    } catch (error) {
+      throw new Error(`Failed to delete pod: ${error.message}`);
+    }
+  }
+
+  // Get pod status
+  async getPodStatus(userId) {
+    try {
+      const pods = await this.coreV1Api.listNamespacedPod(
+        this.namespace,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        `user=${userId}`
+      );
+
+      return pods.body.items.map((pod) => ({
+        name: pod.metadata.name,
+        status: pod.status.phase,
+        ready: pod.status.containerStatuses?.[0]?.ready || false,
+        restartCount: pod.status.containerStatuses?.[0]?.restartCount || 0,
+        created: pod.metadata.creationTimestamp,
+      }));
+    } catch (error) {
+      throw new Error(`Failed to get pod status: ${error.message}`);
+    }
+  }
+
+  // Get cluster resources
+  async getClusterResources() {
+    try {
+      const nodes = await this.coreV1Api.listNode();
+      const pods = await this.coreV1Api.listNamespacedPod(this.namespace);
+
+      return {
+        nodes: nodes.body.items.length,
+        totalPods: pods.body.items.length,
+        runningPods: pods.body.items.filter(
+          (pod) => pod.status.phase === "Running"
+        ).length,
+      };
+    } catch (error) {
+      throw new Error(`Failed to get cluster resources: ${error.message}`);
+    }
+  }
+}
+
+module.exports = new K8sService();
