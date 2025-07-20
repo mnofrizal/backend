@@ -51,27 +51,39 @@ class K8sService {
   // Create PVC
   async createPvc(userId) {
     try {
-      const pvcYaml = this.loadPvcTemplate(userId);
-      const pvcManifest = this.parseYaml(pvcYaml)[0];
+      console.log("Creating PVC for user:", userId);
+      console.log("Target namespace:", this.namespace);
 
-      // Ensure namespace is set in metadata
+      const pvcYaml = this.loadPvcTemplate(userId);
+      console.log("PVC YAML loaded:", pvcYaml);
+
+      const pvcManifest = this.parseYaml(pvcYaml)[0];
+      console.log("Parsed PVC manifest:", JSON.stringify(pvcManifest, null, 2));
+
+      // Ensure namespace is set
       if (!pvcManifest.metadata) {
         pvcManifest.metadata = {};
       }
       pvcManifest.metadata.namespace = this.namespace;
+
+      console.log(
+        "Final PVC manifest with namespace:",
+        JSON.stringify(pvcManifest, null, 2)
+      );
+      console.log("About to call API with namespace:", this.namespace);
 
       const result = await this.coreV1Api.createNamespacedPersistentVolumeClaim(
         this.namespace,
         pvcManifest
       );
 
+      console.log("PVC created successfully");
       return result.body;
     } catch (error) {
       console.error("PVC creation error:", error);
       throw new Error(`Failed to create PVC: ${error.message}`);
     }
   }
-
   // Create pod deployment
   async createPod(userId, planType, nodePort) {
     try {
