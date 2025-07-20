@@ -119,6 +119,7 @@ class K8sService {
     try {
       // Create PVC first
       await this.createPvc(userId);
+      console.log("PVC created, now creating deployment...");
 
       // Load and parse pod template
       const podYaml = this.loadTemplate(planType, userId, nodePort);
@@ -127,24 +128,32 @@ class K8sService {
       const deployment = manifests[0];
       const service = manifests[1];
 
-      // Ensure namespace is set in metadata for both resources
+      // Ensure namespace is set in metadata
       if (!deployment.metadata) deployment.metadata = {};
       if (!service.metadata) service.metadata = {};
 
       deployment.metadata.namespace = this.namespace;
       service.metadata.namespace = this.namespace;
 
-      // Create deployment
-      const deploymentResult = await this.appsV1Api.createNamespacedDeployment(
-        this.namespace,
-        deployment
+      console.log(
+        "Creating deployment with explicit parameters for namespace:",
+        this.namespace
       );
 
-      // Create service
-      const serviceResult = await this.coreV1Api.createNamespacedService(
-        this.namespace,
-        service
-      );
+      // Use same explicit parameter format as PVC
+      const deploymentResult = await this.appsV1Api.createNamespacedDeployment({
+        namespace: this.namespace,
+        body: deployment,
+      });
+
+      console.log("Deployment created, now creating service...");
+
+      const serviceResult = await this.coreV1Api.createNamespacedService({
+        namespace: this.namespace,
+        body: service,
+      });
+
+      console.log("Pod and service created successfully");
 
       return {
         deployment: deploymentResult.body,
