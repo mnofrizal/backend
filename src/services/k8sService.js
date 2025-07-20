@@ -165,57 +165,57 @@ class K8sService {
     }
   }
 
-  // Delete pod (graceful version)
+  // Delete pod and related resources (positional parameters)
   async deletePod(userId) {
     try {
       console.log("Deleting pod for user:", userId);
 
-      const deploymentName = `${userId}-n8n-basic`; // Try basic first
+      const deploymentName = `${userId}-n8n-basic`;
       const serviceName = `${userId}-n8n-service`;
       const pvcName = `${userId}-n8n-storage`;
 
-      // Delete deployment with explicit parameters
+      console.log("Target deployment:", deploymentName);
+      console.log("Target namespace:", this.namespace);
+
+      // Delete deployment with positional parameters
       try {
-        console.log("Deleting deployment:", deploymentName);
-        await this.appsV1Api.deleteNamespacedDeployment({
-          name: deploymentName,
-          namespace: this.namespace,
-        });
+        await this.appsV1Api.deleteNamespacedDeployment(
+          deploymentName,
+          this.namespace
+        );
         console.log("Basic deployment deleted");
       } catch (err) {
         console.log("Basic deployment not found, trying pro...");
         // Try pro deployment
         const proDeploymentName = `${userId}-n8n-pro`;
         try {
-          await this.appsV1Api.deleteNamespacedDeployment({
-            name: proDeploymentName,
-            namespace: this.namespace,
-          });
+          await this.appsV1Api.deleteNamespacedDeployment(
+            proDeploymentName,
+            this.namespace
+          );
           console.log("Pro deployment deleted");
         } catch (proErr) {
           console.log("No deployment found for user:", userId);
         }
       }
 
-      // Delete service with explicit parameters
+      // Delete service with positional parameters
       try {
-        console.log("Deleting service:", serviceName);
-        await this.coreV1Api.deleteNamespacedService({
-          name: serviceName,
-          namespace: this.namespace,
-        });
+        await this.coreV1Api.deleteNamespacedService(
+          serviceName,
+          this.namespace
+        );
         console.log("Service deleted");
       } catch (err) {
         console.log("Service not found:", serviceName);
       }
 
-      // Delete PVC with explicit parameters
+      // Delete PVC with positional parameters
       try {
-        console.log("Deleting PVC:", pvcName);
-        await this.coreV1Api.deleteNamespacedPersistentVolumeClaim({
-          name: pvcName,
-          namespace: this.namespace,
-        });
+        await this.coreV1Api.deleteNamespacedPersistentVolumeClaim(
+          pvcName,
+          this.namespace
+        );
         console.log("PVC deleted");
       } catch (err) {
         console.log("PVC not found:", pvcName);
