@@ -54,6 +54,12 @@ class K8sService {
       const pvcYaml = this.loadPvcTemplate(userId);
       const pvcManifest = this.parseYaml(pvcYaml)[0];
 
+      // Ensure namespace is set in metadata
+      if (!pvcManifest.metadata) {
+        pvcManifest.metadata = {};
+      }
+      pvcManifest.metadata.namespace = this.namespace;
+
       const result = await this.coreV1Api.createNamespacedPersistentVolumeClaim(
         this.namespace,
         pvcManifest
@@ -61,6 +67,7 @@ class K8sService {
 
       return result.body;
     } catch (error) {
+      console.error("PVC creation error:", error);
       throw new Error(`Failed to create PVC: ${error.message}`);
     }
   }
@@ -77,6 +84,13 @@ class K8sService {
 
       const deployment = manifests[0];
       const service = manifests[1];
+
+      // Ensure namespace is set in metadata for both resources
+      if (!deployment.metadata) deployment.metadata = {};
+      if (!service.metadata) service.metadata = {};
+
+      deployment.metadata.namespace = this.namespace;
+      service.metadata.namespace = this.namespace;
 
       // Create deployment
       const deploymentResult = await this.appsV1Api.createNamespacedDeployment(
@@ -95,6 +109,7 @@ class K8sService {
         service: serviceResult.body,
       };
     } catch (error) {
+      console.error("Pod creation error:", error);
       throw new Error(`Failed to create pod: ${error.message}`);
     }
   }
