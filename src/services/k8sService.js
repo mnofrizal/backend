@@ -165,39 +165,63 @@ class K8sService {
     }
   }
 
-  // Delete pod and related resources
+  // Delete pod (graceful version)
   async deletePod(userId) {
     try {
-      const deploymentName = `${userId}-n8n-basic`; // atau pro
-      const serviceName = `${userId}-n8n-service`;
-      const pvcName = `${userId}-n8n-storage`;
+      console.log("Deleting all resources for user:", userId);
 
-      // Delete deployment
-      try {
-        await this.appsV1Api.deleteNamespacedDeployment(
-          deploymentName,
-          this.namespace
-        );
-      } catch (err) {
-        // Try pro deployment
-        const proDeploymentName = `${userId}-n8n-pro`;
-        await this.appsV1Api.deleteNamespacedDeployment(
-          proDeploymentName,
-          this.namespace
-        );
+      const results = {
+        deployment: false,
+        service: false,
+        pvc: false,
+      };
+
+      // Try to delete deployment (both basic and pro)
+      const deploymentNames = [`${userId}-n8n-basic`, `${userId}-n8n-pro`];
+      for (const deploymentName of deploymentNames) {
+        try {
+          await this.appsV1Api.deleteNamespacedDeployment({
+            name: deploymentName,
+            namespace: this.namespace,
+          });
+          console.log("Deleted deployment:", deploymentName);
+          results.deployment = true;
+          break; // Stop after first successful deletion
+        } catch (error) {
+          console.log(
+            `Deployment ${deploymentName} not found or already deleted`
+          );
+        }
       }
 
       // Delete service
-      await this.coreV1Api.deleteNamespacedService(serviceName, this.namespace);
+      try {
+        await this.coreV1Api.deleteNamespacedService({
+          name: `${userId}-n8n-service`,
+          namespace: this.namespace,
+        });
+        console.log("Deleted service");
+        results.service = true;
+      } catch (error) {
+        console.log("Service not found or already deleted");
+      }
 
       // Delete PVC
-      await this.coreV1Api.deleteNamespacedPersistentVolumeClaim(
-        pvcName,
-        this.namespace
-      );
+      try {
+        await this.coreV1Api.deleteNamespacedPersistentVolumeClaim({
+          name: `${userId}-n8n-storage`,
+          namespace: this.namespace,
+        });
+        console.log("Deleted PVC");
+        results.pvc = true;
+      } catch (error) {
+        console.log("PVC not found or already deleted");
+      }
 
-      return true;
+      console.log("Deletion results:", results);
+      return true; // Return success even if some resources weren't found
     } catch (error) {
+      console.error("Delete pod error:", error);
       throw new Error(`Failed to delete pod: ${error.message}`);
     }
   }
