@@ -7,12 +7,26 @@ class K8sService {
     this.kc = new k8s.KubeConfig();
     this.kc.loadFromDefault();
 
+    // Fix for K3s TLS issue - force skipTLSVerify
+    const cluster = this.kc.getCurrentCluster();
+    if (cluster) {
+      cluster.skipTLSVerify = true;
+      console.log("Set skipTLSVerify=true for cluster:", cluster.name);
+    }
+
+    // Also set it globally for the config
+    const clusters = this.kc.getClusters();
+    clusters.forEach((c) => {
+      c.skipTLSVerify = true;
+    });
+
     this.appsV1Api = this.kc.makeApiClient(k8s.AppsV1Api);
     this.coreV1Api = this.kc.makeApiClient(k8s.CoreV1Api);
 
     this.namespace = "user-pods";
-  }
 
+    console.log("K8s client initialized with TLS verification disabled");
+  }
   // Load and process templates
   loadTemplate(templateType, userId, nodePort) {
     const templatePath = path.join(
