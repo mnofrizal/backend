@@ -5,27 +5,34 @@ const path = require("path");
 class K8sService {
   constructor() {
     this.kc = new k8s.KubeConfig();
-    this.kc.loadFromDefault();
 
-    // Fix for K3s TLS issue - force skipTLSVerify
+    try {
+      // Try to load from standard location first
+      this.kc.loadFromFile(process.env.HOME + "/.kube/config");
+      console.log("Loaded kubeconfig from ~/.kube/config");
+    } catch (error) {
+      console.log("Failed to load from ~/.kube/config, trying default...");
+      this.kc.loadFromDefault();
+    }
+
+    // Debug: show current config
     const cluster = this.kc.getCurrentCluster();
+    const currentContext = this.kc.getCurrentContext();
+    console.log("Current context:", currentContext);
+    console.log("Current cluster server:", cluster?.server);
+
+    // Fix for K3s TLS issue
     if (cluster) {
       cluster.skipTLSVerify = true;
       console.log("Set skipTLSVerify=true for cluster:", cluster.name);
     }
-
-    // Also set it globally for the config
-    const clusters = this.kc.getClusters();
-    clusters.forEach((c) => {
-      c.skipTLSVerify = true;
-    });
 
     this.appsV1Api = this.kc.makeApiClient(k8s.AppsV1Api);
     this.coreV1Api = this.kc.makeApiClient(k8s.CoreV1Api);
 
     this.namespace = "user-pods";
 
-    console.log("K8s client initialized with TLS verification disabled");
+    console.log("K8s client initialized successfully");
   }
   // Load and process templates
   loadTemplate(templateType, userId, nodePort) {
